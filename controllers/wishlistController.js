@@ -2,93 +2,143 @@ import { supabase } from "../config/supabase.js";
 
 /*
 ADD TO WISHLIST
-POST /api/wishlist
+POST /api/wishlist/:roomId
 */
 
 export const addWishlist = async (req, res) => {
     try {
-        const { user_id, room_id } = req.body;
+
+        const { roomId } = req.params;
+        const userId = req.user.id;
+
+        /* Prevent duplicate wishlist */
+
+        const { data: existing } = await supabase
+            .from("wishlist")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("room_id", roomId)
+            .single();
+
+        if (existing) {
+            return res.status(400).json({
+                message: "Room already in wishlist"
+            });
+        }
 
         const { data, error } = await supabase
             .from("wishlist")
             .insert([
                 {
-                    user_id,
-                    room_id,
-                },
+                    user_id: userId,
+                    room_id: roomId
+                }
             ])
-            .select();
+            .select()
+            .single();
 
         if (error) {
-            return res.status(500).json({ error: error.message });
+            return res.status(500).json({
+                error: error.message
+            });
         }
 
         res.status(201).json({
             message: "Room added to wishlist",
-            data,
+            wishlist: data
         });
+
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({
+            error: err.message
+        });
     }
 };
 
+
 /*
 GET USER WISHLIST
-GET /api/wishlist/:userId
+GET /api/wishlist
 */
 
 export const getWishlist = async (req, res) => {
     try {
-        const { userId } = req.params;
+
+        const userId = req.user.id;
 
         const { data, error } = await supabase
             .from("wishlist")
-            .select(
-                `
+            .select(`
         id,
         rooms(
           id,
           title,
           price,
           city,
-          location
+          location,
+          room_images(image_url)
         )
-      `
-            )
+      `)
             .eq("user_id", userId);
 
         if (error) {
-            return res.status(500).json({ error: error.message });
+            return res.status(500).json({
+                error: error.message
+            });
         }
 
-        res.json(data);
+        const formatted = data.map(item => {
+            const { rooms } = item;
+
+            const { room_images, ...rest } = rooms;
+
+            return {
+                id: item.id,
+                ...rest,
+                images: room_images.map(img => img.image_url)
+            };
+        });
+
+        res.json(formatted);
+
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({
+            error: err.message
+        });
     }
 };
 
+
 /*
 REMOVE FROM WISHLIST
-DELETE /api/wishlist/:id
+DELETE /api/wishlist/:roomId
 */
 
 export const removeWishlist = async (req, res) => {
     try {
-        const { id } = req.params;
+
+        const { roomId } = req.params;
+        const userId = req.user.id;
 
         const { error } = await supabase
             .from("wishlist")
             .delete()
-            .eq("id", id);
+            .eq("user_id", userId)
+            .eq("room_id", roomId);
 
         if (error) {
-            return res.status(500).json({ error: error.message });
+            return res.status(500).json({
+                error: error.message
+            });
         }
 
         res.json({
-            message: "Removed from wishlist",
+            message: "Removed from wishlist"
         });
+
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({
+            error: err.message
+        });
     }
 };
