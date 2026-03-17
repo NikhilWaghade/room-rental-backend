@@ -1,30 +1,13 @@
-import multer from "multer";
 import jwt from "jsonwebtoken";
 
-
-/* ============================= */
-/* IMAGE UPLOAD MIDDLEWARE */
-/* ============================= */
-
-const storage = multer.memoryStorage();
-
-export const upload = multer({
-    storage,
-    limits: {
-        fileSize: 5 * 1024 * 1024
-    }
-});
-
-
-/* ============================= */
-/* JWT AUTH MIDDLEWARE */
-/* ============================= */
+/* JWT AUTH */
 
 export const protect = (req, res, next) => {
 
+
     const authHeader = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith("Bearer")) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
         return res.status(401).json({
             message: "Not authorized, token missing"
         });
@@ -47,17 +30,14 @@ export const protect = (req, res, next) => {
         });
 
     }
+
 };
 
-
-
-/* ============================= */
-/* ROLE CHECK MIDDLEWARE */
-/* ============================= */
+/* ROLE CHECK */
 
 export const isOwner = (req, res, next) => {
 
-    if (req.user.role !== "owner") {
+    if (!req.user || req.user.role !== "owner") {
 
         return res.status(403).json({
             message: "Only owners can perform this action"
@@ -66,4 +46,5 @@ export const isOwner = (req, res, next) => {
     }
 
     next();
+
 };

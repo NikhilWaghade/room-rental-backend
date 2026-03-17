@@ -24,7 +24,7 @@ export const createRoom = async (req, res) => {
                     title,
                     description,
                     price,
-                    city,
+                    city: city.trim(),
                     location,
                     room_type,
                     furnished,
@@ -81,13 +81,15 @@ export const getRooms = async (req, res) => {
 
         const {
             city,
+            location,
             room_type,
             furnished,
+            price,
             price_min,
             price_max,
             sort,
             page = 1,
-            limit = 10
+            limit = 20
         } = req.query;
 
         const from = (page - 1) * limit;
@@ -100,29 +102,39 @@ export const getRooms = async (req, res) => {
         room_images(image_url)
       `, { count: "exact" });
 
-        /* Filters */
+        /* ---------- FILTERS ---------- */
 
         if (city) {
             query = query.ilike("city", `%${city}%`);
         }
 
+        if (location) {
+            query = query.ilike("location", `%${location}%`);
+        }
+
         if (room_type) {
-            query = query.eq("room_type", room_type);
+            query = query.ilike("room_type", room_type);
         }
 
         if (furnished !== undefined) {
             query = query.eq("furnished", furnished === "true");
         }
 
+        /* price from frontend */
+
+        if (price) {
+            query = query.lte("price", Number(price));
+        }
+
         if (price_min) {
-            query = query.gte("price", price_min);
+            query = query.gte("price", Number(price_min));
         }
 
         if (price_max) {
-            query = query.lte("price", price_max);
+            query = query.lte("price", Number(price_max));
         }
 
-        /* Sorting */
+        /* ---------- SORT ---------- */
 
         if (sort === "price_asc") {
             query = query.order("price", { ascending: true });
@@ -132,7 +144,7 @@ export const getRooms = async (req, res) => {
             query = query.order("price", { ascending: false });
         }
 
-        /* Pagination */
+        /* ---------- PAGINATION ---------- */
 
         query = query.range(from, to);
 
@@ -159,12 +171,13 @@ export const getRooms = async (req, res) => {
         });
 
     } catch (err) {
+
         res.status(500).json({
             error: err.message
         });
+
     }
 };
-
 /* GET SINGLE ROOM */
 
 export const getRoomById = async (req, res) => {
@@ -235,36 +248,46 @@ export const deleteRoom = async (req, res) => {
 /* GET MY ROOMS (OWNER) */
 
 export const getMyRooms = async (req, res) => {
+
     try {
+
+        if (!req.user) {
+            return res.status(401).json({
+                message: "User not authenticated"
+            });
+        }
 
         const ownerId = req.user.id;
 
         const { data, error } = await supabase
             .from("rooms")
             .select(`
-        *,
-        room_images(image_url)
-      `)
+    *,
+    room_images(image_url)
+   `)
             .eq("owner_id", ownerId);
 
         if (error) {
             return res.status(400).json(error);
         }
 
-        const formattedRooms = data.map((room) => {
-            const { room_images, ...rest } = room;
-
-            return {
-                ...rest,
-                images: room_images.map((img) => img.image_url)
-            };
-        });
+        const formattedRooms = data.map((room) => ({
+            ...room,
+            images: room.room_images.map((img) => img.image_url)
+        }));
 
         res.json(formattedRooms);
 
     } catch (err) {
-        res.status(500).json({ error: err.message });
+
+        console.log(err);
+
+        res.status(500).json({
+            error: err.message
+        });
+
     }
+
 };
 
 /* UPDATE ROOM */

@@ -3,6 +3,54 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 
+// jwt token 
+export const generateTokens = (user) => {
+
+    const accessToken = jwt.sign(
+        { id: user.id, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: "15m" }
+    );
+
+    const refreshToken = jwt.sign(
+        { id: user.id },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+    );
+
+    return { accessToken, refreshToken };
+
+};
+
+export const refreshTokenController = (req, res) => {
+
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+        return res.status(401).json({ message: "Refresh token missing" });
+    }
+
+    try {
+
+        const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+
+        const accessToken = jwt.sign(
+            { id: decoded.id },
+            process.env.JWT_SECRET,
+            { expiresIn: "15m" }
+        );
+
+        res.json({ accessToken });
+
+    } catch (error) {
+
+        res.status(403).json({ message: "Invalid refresh token" });
+
+    }
+
+};
+
+
 /* REGISTER USER */
 
 export const registerUser = async (req, res) => {

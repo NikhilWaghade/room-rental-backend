@@ -6,47 +6,33 @@ import {
     getRoomById,
     deleteRoom,
     getMyRooms,
-    updateRoom,
-    deleteRoomImage
+    updateRoom
 } from "../controllers/roomController.js";
 
-import {
-    upload,
-    protect,
-    isOwner
-} from "../middleware/authMiddleware.js";
+import { protect, isOwner } from "../middleware/authMiddleware.js";
+
+import { upload } from "../middleware/uploadMiddleware.js";
+
+import { roomValidation } from "../middleware/validation.js";
 
 const router = express.Router();
 
-/* CREATE ROOM (OWNER ONLY) */
 
 router.post(
     "/",
     protect,
     isOwner,
     upload.array("images", 5),
+    roomValidation,
     createRoom
 );
 
 
-/* GET ALL ROOMS (PUBLIC) */
-
 router.get("/", getRooms);
 
-/* GET OWNER ROOMS */
-
-router.get(
-    "/my-rooms",
-    protect,
-    isOwner,
-    getMyRooms
-);
-
-/* GET SINGLE ROOM */
+router.get("/my-rooms", protect, isOwner, getMyRooms);
 
 router.get("/:id", getRoomById);
-
-/* UPDATE ROOM (OWNER ONLY) */
 
 router.put(
     "/:id",
@@ -56,24 +42,6 @@ router.put(
     updateRoom
 );
 
-
-/* DELETE ROOM (OWNER ONLY) */
-
-router.delete(
-    "/:id",
-    protect,
-    isOwner,
-    deleteRoom
-);
-
-/* DELETE SINGLE IMAGE */
-
-router.delete(
-    "/image/:imageId",
-    protect,
-    isOwner,
-    deleteRoomImage
-);
-
+router.delete("/:id", protect, isOwner, deleteRoom);
 
 export default router;

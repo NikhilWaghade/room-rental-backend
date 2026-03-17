@@ -2,12 +2,25 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
+
 import authRoutes from "./routes/authRoutes.js";
 import roomRoutes from "./routes/roomRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
+import { apiLimiter } from "./middleware/rateLimiter.js";
+import helmet from "helmet";
+import { logger } from "./utils/logger.js";
+// import xss from "xss-clean";
+// import { env } from "./config/env.js";
+// import mongoSanitize from "express-mongo-sanitize";
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./config/swagger.js";
+
+
 
 dotenv.config();
+
+
 
 const app = express();
 
@@ -15,6 +28,10 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(logger);
+// app.use(xss());
+// app.use(mongoSanitize());
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 /* ---------------- Health Check ---------------- */
 
@@ -46,6 +63,17 @@ app.use((err, req, res, next) => {
         error: "Internal Server Error",
     });
 });
+
+app.use((req, res, next) => {
+    res.set("Cache-Control", "no-store")
+    next()
+})
+
+// apiLimiter 
+app.use("/api", apiLimiter);
+
+// use helmet 
+app.use(helmet());
 
 /* ---------------- Start Server ---------------- */
 
