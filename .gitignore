@@ -4,7 +4,7 @@
 node_modules/
 
 # =========================
-# ENV FILES (CRITICAL 🔥)
+# ENV FILES (CRITICAL )
 # =========================
 .env
 .env.*

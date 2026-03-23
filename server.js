@@ -39,6 +39,13 @@ app.get("/", (req, res) => {
     res.send("Room Rental API is running");
 });
 
+// api route 
+app.get("/api", (req, res) => {
+    res.json({
+        message: "API is running 🚀"
+    });
+});
+
 /* ---------------- Routes ---------------- */
 
 app.use("/api/auth", authRoutes);
