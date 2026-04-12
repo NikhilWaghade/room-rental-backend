@@ -181,23 +181,33 @@ export const getRooms = async (req, res) => {
 /* GET SINGLE ROOM */
 
 export const getRoomById = async (req, res) => {
-
     const { id } = req.params;
 
-    const { data, error } = await supabase
+    // Step 1: Room fetch karo
+    const { data: roomData, error: roomError } = await supabase
         .from("rooms")
-        .select(`
-      *,
-      room_images(image_url)
-    `)
+        .select(`*, room_images(image_url)`)
         .eq("id", id)
         .single();
 
-    if (error) return res.status(400).json(error);
+    if (roomError) return res.status(400).json(roomError);
 
+    // Step 2: Owner fetch karo — sirf id, name, phone
+    const { data: ownerData, error: ownerError } = await supabase
+        .from("users")
+        .select("id, name, phone")  // ✅ city aur location hata diya
+        .eq("id", roomData.owner_id)
+        .single();
+
+    console.log("owner_id:", roomData.owner_id);
+    console.log("ownerData:", ownerData);
+    console.log("ownerError:", ownerError);
+
+    // Step 3: Combine karke bhejo
     const room = {
-        ...data,
-        images: data.room_images.map(img => img.image_url)
+        ...roomData,
+        images: roomData.room_images.map(img => img.image_url),
+        owner: ownerData || null
     };
 
     res.json(room);
