@@ -11,35 +11,49 @@ import {
 
 import { protect, isOwner } from "../middleware/authMiddleware.js";
 
-// ✅ upload ki jagah uploadFields import karo
 import { upload, uploadFields } from "../middleware/uploadMiddleware.js";
 
 import { roomValidation } from "../middleware/validation.js";
 
 const router = express.Router();
 
-router.post(
-  "/",
-  protect,
-  isOwner,
-  uploadFields, // ← ye hona chahiye, upload.array nahi
-  roomValidation,
-  createRoom,
-);
+/* CREATE ROOM */
+
+router.post("/", protect, isOwner, uploadFields, roomValidation, createRoom);
+
+/* GET ALL ROOMS */
 
 router.get("/", getRooms);
 
+/* GET MY ROOMS */
+
 router.get("/my-rooms", protect, isOwner, getMyRooms);
+
+/* GET SINGLE ROOM */
 
 router.get("/:id", getRoomById);
 
+/* UPDATE ROOM */
+
+// router.put(
+//   "/:id",
+//   protect,
+//   isOwner,
+//   uploadFields,
+//   updateRoom,
+// );
 router.put(
   "/:id",
   protect,
   isOwner,
-  upload.array("images", 5), // ✅ ye abhi same rehne do - update me video baad me add karenge
+  upload.fields([
+    { name: "images", maxCount: 10 },
+    { name: "video", maxCount: 1 },
+  ]),
   updateRoom,
 );
+
+/* DELETE ROOM */
 
 router.delete("/:id", protect, isOwner, deleteRoom);
 

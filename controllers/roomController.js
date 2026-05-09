@@ -2,6 +2,7 @@ import { supabase } from "../config/supabase.js";
 import {
   uploadImageToCloudinary,
   uploadVideoToCloudinary,
+  // uploadVideoToSupabase 
 } from "../utils/imageUpload.js";
 
 /* CREATE ROOM (MULTIPLE IMAGES) */
@@ -295,24 +296,35 @@ export const updateRoom = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const { title, description, price, city, location, room_type, furnished } =
-      req.body;
+    const {
+      title,
+      description,
+      price,
+      city,
+      location,
+      room_type,
+      furnished,
+    } = req.body;
 
-    /* Check room exists */
+    /* =========================
+       CHECK ROOM EXISTS
+    ========================== */
 
-    const { data: room } = await supabase
+    const { data: room, error: roomError } = await supabase
       .from("rooms")
       .select("*")
       .eq("id", id)
       .single();
 
-    if (!room) {
+    if (roomError || !room) {
       return res.status(404).json({
         message: "Room not found",
       });
     }
 
-    /* Ownership check */
+    /* =========================
+       OWNERSHIP CHECK
+    ========================== */
 
     if (room.owner_id !== req.user.id) {
       return res.status(403).json({
@@ -320,36 +332,64 @@ export const updateRoom = async (req, res) => {
       });
     }
 
-    /* Update room */
+    /* =========================
+       VIDEO UPLOAD
+    ========================== */
 
-    const { data: updatedRoom, error } = await supabase
-      .from("rooms")
-      .update({
-        title,
-        description,
-        price,
-        city,
-        location,
-        room_type,
-        furnished,
-      })
-      .eq("id", id)
-      .select()
-      .single();
+    let videoUrl = room.video_url || "";
 
-    if (error) {
-      return res.status(400).json(error);
+    if (
+      req.files &&
+      req.files.video &&
+      req.files.video.length > 0
+    ) {
+      videoUrl = await uploadVideoToCloudinary(
+        req.files.video[0]
+      );
     }
 
-    /* Upload new images if provided */
+    /* =========================
+       UPDATE ROOM DATA
+    ========================== */
 
-    const newImages = [];
+    const { data: updatedRoom, error: updateError } =
+      await supabase
+        .from("rooms")
+        .update({
+          title,
+          description,
+          price: Number(price),
+          city,
+          location,
+          room_type,
+          furnished:
+            furnished === "true" || furnished === true,
+          video_url: videoUrl,
+        })
+        .eq("id", id)
+        .select()
+        .single();
 
-    if (req.files && req.files.length > 0) {
-      for (const file of req.files) {
-        const imageUrl = await uploadImageToSupabase(file);
+    if (updateError) {
+      console.log(updateError);
 
-        newImages.push(imageUrl);
+      return res.status(400).json({
+        error: updateError.message,
+      });
+    }
+
+    /* =========================
+       IMAGE UPLOAD
+    ========================== */
+
+    if (
+      req.files &&
+      req.files.images &&
+      req.files.images.length > 0
+    ) {
+      for (const file of req.files.images) {
+        const imageUrl =
+          await uploadImageToCloudinary(file);
 
         await supabase.from("room_images").insert([
           {
@@ -360,21 +400,31 @@ export const updateRoom = async (req, res) => {
       }
     }
 
-    /* Fetch images */
+    /* =========================
+       GET UPDATED IMAGES
+    ========================== */
 
-    const { data: images } = await supabase
+    const { data: roomImages } = await supabase
       .from("room_images")
       .select("image_url")
       .eq("room_id", id);
 
-    const imageUrls = images.map((img) => img.image_url);
+    const images =
+      roomImages?.map((img) => img.image_url) || [];
 
-    res.json({
+    /* =========================
+       RESPONSE
+    ========================== */
+
+    res.status(200).json({
       message: "Room updated successfully",
       room: updatedRoom,
-      images: imageUrls,
+      images,
+      video: videoUrl,
     });
   } catch (err) {
+    console.log("UPDATE ROOM ERROR:", err);
+
     res.status(500).json({
       error: err.message,
     });
