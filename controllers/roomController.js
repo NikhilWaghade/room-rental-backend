@@ -2,7 +2,7 @@ import { supabase } from "../config/supabase.js";
 import {
   uploadImageToCloudinary,
   uploadVideoToCloudinary,
-  // uploadVideoToSupabase 
+  // uploadVideoToSupabase
 } from "../utils/imageUpload.js";
 
 /* CREATE ROOM (MULTIPLE IMAGES) */
@@ -252,6 +252,23 @@ export const deleteRoom = async (req, res) => {
 /* GET MY ROOMS (OWNER) */
 
 export const getMyRooms = async (req, res) => {
+  const ownerId = req.user.id;
+
+  console.log("Logged In Owner ID:", ownerId);
+
+  const { data, error } = await supabase
+    .from("rooms")
+    .select(
+      `
+    *,
+    room_images(image_url)
+  `,
+    )
+    .eq("owner_id", ownerId);
+
+  console.log("Rooms Found:", data?.length);
+  console.log("Rooms Data:", data);
+
   try {
     if (!req.user) {
       return res.status(401).json({
@@ -296,15 +313,8 @@ export const updateRoom = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const {
-      title,
-      description,
-      price,
-      city,
-      location,
-      room_type,
-      furnished,
-    } = req.body;
+    const { title, description, price, city, location, room_type, furnished } =
+      req.body;
 
     /* =========================
        CHECK ROOM EXISTS
@@ -338,37 +348,29 @@ export const updateRoom = async (req, res) => {
 
     let videoUrl = room.video_url || "";
 
-    if (
-      req.files &&
-      req.files.video &&
-      req.files.video.length > 0
-    ) {
-      videoUrl = await uploadVideoToCloudinary(
-        req.files.video[0]
-      );
+    if (req.files && req.files.video && req.files.video.length > 0) {
+      videoUrl = await uploadVideoToCloudinary(req.files.video[0]);
     }
 
     /* =========================
        UPDATE ROOM DATA
     ========================== */
 
-    const { data: updatedRoom, error: updateError } =
-      await supabase
-        .from("rooms")
-        .update({
-          title,
-          description,
-          price: Number(price),
-          city,
-          location,
-          room_type,
-          furnished:
-            furnished === "true" || furnished === true,
-          video_url: videoUrl,
-        })
-        .eq("id", id)
-        .select()
-        .single();
+    const { data: updatedRoom, error: updateError } = await supabase
+      .from("rooms")
+      .update({
+        title,
+        description,
+        price: Number(price),
+        city,
+        location,
+        room_type,
+        furnished: furnished === "true" || furnished === true,
+        video_url: videoUrl,
+      })
+      .eq("id", id)
+      .select()
+      .single();
 
     if (updateError) {
       console.log(updateError);
@@ -382,14 +384,9 @@ export const updateRoom = async (req, res) => {
        IMAGE UPLOAD
     ========================== */
 
-    if (
-      req.files &&
-      req.files.images &&
-      req.files.images.length > 0
-    ) {
+    if (req.files && req.files.images && req.files.images.length > 0) {
       for (const file of req.files.images) {
-        const imageUrl =
-          await uploadImageToCloudinary(file);
+        const imageUrl = await uploadImageToCloudinary(file);
 
         await supabase.from("room_images").insert([
           {
@@ -409,8 +406,7 @@ export const updateRoom = async (req, res) => {
       .select("image_url")
       .eq("room_id", id);
 
-    const images =
-      roomImages?.map((img) => img.image_url) || [];
+    const images = roomImages?.map((img) => img.image_url) || [];
 
     /* =========================
        RESPONSE

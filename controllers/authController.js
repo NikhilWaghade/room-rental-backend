@@ -22,6 +22,7 @@ export const generateTokens = (user) => {
   const refreshToken = jwt.sign(
     {
       id: user.id,
+      role: user.role,
     },
     process.env.JWT_SECRET,
     { expiresIn: "7d" },
@@ -47,6 +48,7 @@ export const refreshTokenController = (req, res) => {
     const accessToken = jwt.sign(
       {
         id: decoded.id,
+        role: decoded.role,
       },
       process.env.JWT_SECRET,
       { expiresIn: "15m" },

@@ -8,6 +8,7 @@ import authRoutes from "./routes/authRoutes.js";
 import roomRoutes from "./routes/roomRoutes.js";
 import reviewRoutes from "./routes/reviewRoutes.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 
 import { apiLimiter } from "./middleware/rateLimiter.js";
 import { logger } from "./utils/logger.js";
@@ -65,6 +66,7 @@ app.use("/api/reviews", reviewRoutes);
 
 app.use("/api/wishlist", wishlistRoutes);
 
+app.use("/api/users", userRoutes);
 /* ---------------- 404 Handler ---------------- */
 
 app.use((req, res) => {
