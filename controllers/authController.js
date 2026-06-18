@@ -3,12 +3,12 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 
-// import { User } from "../models/User.js";
+import crypto from "crypto";
+import { sendEmail } from "../utils/sendEmail.js";
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 /* JWT TOKENS */
-
 export const generateTokens = (user) => {
   const accessToken = jwt.sign(
     {
@@ -32,7 +32,6 @@ export const generateTokens = (user) => {
 };
 
 /* REFRESH TOKEN */
-
 export const refreshTokenController = (req, res) => {
   const { refreshToken } = req.body;
 
@@ -63,7 +62,6 @@ export const refreshTokenController = (req, res) => {
 };
 
 /* REGISTER USER */
-
 export const registerUser = async (req, res) => {
   try {
     const { name, email, password, phone, role } = req.body;
@@ -94,6 +92,10 @@ export const registerUser = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+
+    const verificationExpire = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
     /* INSERT USER */
 
     const { data, error } = await supabase
@@ -106,6 +108,12 @@ export const registerUser = async (req, res) => {
           phone,
           role,
           provider: "local",
+
+          email_verified: false,
+
+          verification_token: verificationToken,
+
+          verification_token_expire: verificationExpire,
         },
       ])
       .select()
@@ -114,6 +122,32 @@ export const registerUser = async (req, res) => {
     if (error) {
       return res.status(400).json(error);
     }
+
+    const verifyLink = `${process.env.CLIENT_URL}/verify-email/${verificationToken}`;
+
+    await sendEmail(
+      email,
+      "Verify Your Email",
+      `
+    <h2>Email Verification</h2>
+
+    <p>
+      Thank you for registering.
+    </p>
+
+    <p>
+      Click the button below to verify your email:
+    </p>
+
+    <a href="${verifyLink}">
+      Verify Email
+    </a>
+
+    <p>
+      This link will expire in 24 hours.
+    </p>
+  `,
+    );
 
     res.status(201).json({
       message: "User registered successfully",
@@ -127,7 +161,6 @@ export const registerUser = async (req, res) => {
 };
 
 /* LOGIN USER */
-
 export const loginUser = async (req, res) => {
   try {
     const { email, password, role } = req.body;
@@ -153,6 +186,13 @@ export const loginUser = async (req, res) => {
         message: "User not found",
       });
     }
+
+    // email varify message checkar
+    // if (user.provider === "local" && !user.email_verified) {
+    //   return res.status(403).json({
+    //     message: "Please verify your email before login",
+    //   });
+    // }
 
     /* GOOGLE ACCOUNT CHECK */
 
@@ -193,6 +233,8 @@ export const loginUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        phone: user.phone,
+        profile_image: user.profile_image,
       },
     });
   } catch (err) {
@@ -263,7 +305,7 @@ export const googleLogin = async (req, res) => {
           {
             name,
             email,
-            image: picture,
+            profile_image: picture,
             password: "google-auth-user",
             role: role, // selected role from frontend
             provider: "google",
@@ -301,7 +343,7 @@ export const googleLogin = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        image: user.image,
+        profile_image: user.profile_image,
       },
     });
   } catch (error) {
@@ -310,6 +352,202 @@ export const googleLogin = async (req, res) => {
     return res.status(500).json({
       message: "Google Login Failed",
       error: error.message,
+    });
+  }
+};
+
+// forgate password
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        message: "Email is required",
+      });
+    }
+
+    const { data: user } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .maybeSingle();
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
+    const expireTime = new Date(Date.now() + 15 * 60 * 1000);
+
+    const { error } = await supabase
+      .from("users")
+      .update({
+        reset_token: hashedToken,
+        reset_token_expire: expireTime,
+      })
+      .eq("id", user.id);
+
+    if (error) {
+      return res.status(400).json({
+        message: error.message,
+      });
+    }
+
+    const resetLink = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+
+    await sendEmail(
+      user.email,
+      "Reset Password",
+      `
+      <h2>Password Reset</h2>
+
+      <p>Click the button below to reset your password.</p>
+
+      <a href="${resetLink}">
+        Reset Password
+      </a>
+
+      <p>This link will expire in 15 minutes.</p>
+      `,
+    );
+
+    res.json({
+      message: "Password reset link sent successfully",
+    });
+  } catch (error) {
+    console.log("FORGOT PASSWORD ERROR:");
+    console.log(error);
+
+    return res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+// reset password
+export const resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({
+        message: "Password is required",
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        message: "Password must be at least 8 characters long",
+      });
+    }
+
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+    const { data: user } = await supabase
+      .from("users")
+      .select("*")
+      .eq("reset_token", hashedToken)
+      .single();
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid reset token",
+      });
+    }
+
+    if (
+      !user.reset_token_expire ||
+      new Date(user.reset_token_expire) < new Date()
+    ) {
+      return res.status(400).json({
+        message: "Reset token expired",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const { error } = await supabase
+      .from("users")
+      .update({
+        password: hashedPassword,
+        reset_token: null,
+        reset_token_expire: null,
+      })
+      .eq("id", user.id);
+
+    if (error) {
+      return res.status(400).json({
+        message: error.message,
+      });
+    }
+
+    return res.json({
+      message: "Password reset successful",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+//email varification
+export const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const { data: user } = await supabase
+      .from("users")
+      .select("*")
+      .eq("verification_token", token)
+      .single();
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid verification token",
+      });
+    }
+
+    if (
+      !user.verification_token_expire ||
+      new Date(user.verification_token_expire) < new Date()
+    ) {
+      return res.status(400).json({
+        message: "Verification link expired",
+      });
+    }
+
+    const { error } = await supabase
+      .from("users")
+      .update({
+        email_verified: true,
+        verification_token: null,
+        verification_token_expire: null,
+      })
+      .eq("id", user.id);
+
+    if (error) {
+      return res.status(400).json({
+        message: error.message,
+      });
+    }
+
+    return res.json({
+      message: "Email verified successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: error.message,
     });
   }
 };

@@ -1,22 +1,24 @@
 import { supabase } from "../config/supabase.js";
 import bcrypt from "bcryptjs";
+import { uploadImageToCloudinary } from "../utils/imageUpload.js";
 
 /* GET PROFILE */
 
 export const getProfile = async (req, res) => {
   try {
-
     const { data, error } = await supabase
       .from("users")
-      .select(`
+      .select(
+        `
         id,
         name,
         email,
         phone,
         role,
-        image,
+        profile_image,
         provider
-      `)
+      `,
+      )
       .eq("id", req.user.id)
       .single();
 
@@ -27,7 +29,6 @@ export const getProfile = async (req, res) => {
     }
 
     res.json(data);
-
   } catch (error) {
     res.status(500).json({
       message: error.message,
@@ -39,13 +40,7 @@ export const getProfile = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   try {
-
-    const {
-      name,
-      email,
-      phone,
-      image
-    } = req.body;
+    const { name, email, phone, profile_image } = req.body;
 
     const { data, error } = await supabase
       .from("users")
@@ -53,7 +48,7 @@ export const updateProfile = async (req, res) => {
         name,
         email,
         phone,
-        image,
+        profile_image,
       })
       .eq("id", req.user.id)
       .select()
@@ -69,7 +64,6 @@ export const updateProfile = async (req, res) => {
       message: "Profile Updated Successfully",
       user: data,
     });
-
   } catch (error) {
     res.status(500).json({
       message: error.message,
@@ -81,11 +75,7 @@ export const updateProfile = async (req, res) => {
 
 export const changePassword = async (req, res) => {
   try {
-
-    const {
-      currentPassword,
-      newPassword,
-    } = req.body;
+    const { currentPassword, newPassword } = req.body;
 
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
@@ -107,15 +97,11 @@ export const changePassword = async (req, res) => {
 
     if (user.provider === "google") {
       return res.status(400).json({
-        message:
-          "Google users cannot change password here",
+        message: "Google users cannot change password here",
       });
     }
 
-    const isMatch = await bcrypt.compare(
-      currentPassword,
-      user.password
-    );
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
 
     if (!isMatch) {
       return res.status(400).json({
@@ -123,8 +109,7 @@ export const changePassword = async (req, res) => {
       });
     }
 
-    const hashedPassword =
-      await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     const { error: updateError } = await supabase
       .from("users")
@@ -141,6 +126,44 @@ export const changePassword = async (req, res) => {
 
     res.json({
       message: "Password Changed Successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+//Upload Profile 
+export const uploadProfileImage = async (req, res) => {
+  try {
+
+    if (!req.file) {
+      return res.status(400).json({
+        message: "No image selected",
+      });
+    }
+
+    const imageUrl = await uploadImageToCloudinary(req.file);
+
+    const { data, error } = await supabase
+      .from("users")
+      .update({
+        profile_image: imageUrl,
+      })
+      .eq("id", req.user.id)
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(400).json({
+        message: error.message,
+      });
+    }
+
+    res.json({
+      message: "Profile image updated successfully",
+      user: data,
     });
 
   } catch (error) {
